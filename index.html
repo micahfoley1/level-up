@@ -232,6 +232,17 @@ p{margin:0}
 .imp-row .when b{font-family:var(--f-display);font-size:20px;font-weight:800}
 .count{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap;flex:none}
 .count.soon{color:var(--bad)}
+.mgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.mgrid .dh{font-size:10.5px;font-weight:800;color:var(--muted);text-align:center;letter-spacing:.05em;padding-bottom:2px}
+.mday{min-height:66px;border-radius:10px;background:var(--surface);border:1px solid var(--line);padding:4px;display:flex;flex-direction:column;gap:2px;text-align:left;min-width:0;overflow:hidden}
+.mday.out{background:transparent;border-color:transparent;opacity:.4}
+.mday .n{font-family:var(--f-display);font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:2px}
+.mday.today .n span:first-child{background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:0 5px}
+.mday.has-imp{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,var(--surface))}
+.mday .it{font-size:10px;font-weight:700;line-height:1.2;color:var(--bad);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mday .more{font-size:9.5px;font-weight:700;color:var(--muted)}
+.mday .dots{display:flex;gap:2px;flex-wrap:wrap}
+.mday .dots i{width:5px;height:5px;border-radius:50%;background:var(--c)}
 .now{position:absolute;left:44px;right:0;height:2px;background:var(--bad);z-index:2}
 .now::before{content:"";position:absolute;left:-5px;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--bad)}
 .empty{padding:22px 16px;text-align:center;color:var(--muted);font-size:14px}
@@ -482,7 +493,7 @@ function defaults(){
 function migrate(s){const d=defaults();for(const k in d) if(s[k]===undefined) s[k]=d[k];return s}
 let S;try{S=JSON.parse(store.get("lul-state")||"null")}catch(e){S=null}
 S=S?migrate(S):defaults();
-const UI={tab:store.get("lul-tab")||"home",taskDate:today(),schedDate:today(),subject:null,mode:"stopwatch",open:{},armed:null};
+const UI={tab:store.get("lul-tab")||"home",taskDate:today(),schedDate:today(),subject:null,mode:"stopwatch",open:{},armed:null,schedView:store.get("lul-sview")==="month"?"month":"week"};
 if(!["home","habits","tasks","study","schedule","news"].includes(UI.tab)) UI.tab="home";
 
 /* ---------- sync: this device + account (db) ---------- */
@@ -930,7 +941,30 @@ function renderStudy(){
 
 /* ---------- SCHEDULE ---------- */
 const HSTART=6,HEND=24,PX=52;
+function renderMonth(){
+ const sel=UI.schedDate,t=today(),d0=parse(sel),y=d0.getFullYear(),m=d0.getMonth();
+ const first=ymd(new Date(y,m,1)),last=ymd(new Date(y,m+1,0)),start=weekStart(first);
+ const cells=[];let d=start;while(d<=last||cells.length%7){cells.push(d);d=addDays(d,1)}
+ const monthImp=[];
+ const grid=cells.map(c=>{const inM=c.slice(0,7)===first.slice(0,7),evs=eventsOn(c),imp=evs.filter(e=>e.important),rest=evs.filter(e=>!e.important);
+  if(inM)imp.forEach(e=>monthImp.push({e,d:c}));
+  return `<button class="mday ${inM?"":"out"} ${c===t?"today":""} ${inM&&imp.length?"has-imp":""}" data-act="monthDay" data-d="${c}" aria-label="${esc(fmtDate(c,{weekday:"long",month:"long",day:"numeric"}))}${evs.length?`, ${evs.length} events, ${imp.length} important`:""}"><span class="n"><span class="tnum">${parse(c).getDate()}</span>${inM&&imp.length?`<span class="flag">${I.flag}</span>`:""}</span>
+   ${inM?imp.slice(0,2).map(e=>`<span class="it">${esc(e.title)}</span>`).join("")+(imp.length>2?`<span class="more">+${imp.length-2} more</span>`:""):""}
+   ${inM&&rest.length?`<span class="dots">${rest.slice(0,4).map(e=>`<i style="--c:${e.color}"></i>`).join("")}</span>`:""}</button>`}).join("");
+ const label=d0.toLocaleDateString(undefined,{month:"long",year:"numeric"});
+ return `
+ <header class="top"><div><p class="eyebrow">Month overview</p><h1>Schedule</h1></div><button class="icon-btn primary" data-act="eventNew" aria-label="Add event">${I.plus}</button></header>
+ ${viewSeg()}
+ <div class="datenav"><button class="icon-btn" data-act="schedMonth" data-n="-1" aria-label="Previous month">${I.l}</button><button class="lbl" data-act="schedMonth" data-n="0">${esc(label)}<br><span class="muted small" style="font-family:var(--f-body);font-weight:500">${monthImp.length?`${monthImp.length} important ${monthImp.length===1?"event":"events"}`:"No important events"}</span></button><button class="icon-btn" data-act="schedMonth" data-n="1" aria-label="Next month">${I.r}</button></div>
+ <div class="mgrid">${["M","T","W","T","F","S","S"].map(x=>`<span class="dh">${x}</span>`).join("")}${grid}</div>
+ <section><div class="sec-head"><h2>Important this month</h2></div>
+ ${monthImp.length?`<div class="rows">${monthImp.map(({e,d})=>`<button class="row imp-row" style="width:100%;text-align:left" data-act="impOpen" data-id="${e.id}" data-d="${d}"><div class="when"><small>${esc(DOW[parse(d).getDay()])}</small><b class="tnum">${parse(d).getDate()}</b></div><div class="grow"><p class="name"><span class="flag">${I.flag}</span> ${esc(e.title)}</p><p class="meta"><span class="tnum">${evTime(e)}</span>${e.loc?`<span>${esc(e.loc)}</span>`:""}</p></div>${d<t?'<span class="count">Past</span>':d===t?'<span class="count soon">Today</span>':`<span class="count ${diffDays(t,d)<=2?"soon":""}">In ${diffDays(t,d)} ${diffDays(t,d)===1?"day":"days"}</span>`}</button>`).join("")}</div>`
+ :`<div class="rows"><div class="empty"><b>Nothing flagged this month</b>Turn on Important when you add or edit an event.</div></div>`}</section>
+ <p class="muted small">Tap a day to open it in week view.</p>`;
+}
+const viewSeg=()=>`<div class="seg" style="align-self:flex-start">${[["week","Week"],["month","Month"]].map(([k,n])=>`<button class="${(UI.schedView||"week")===k?"on":""}" data-act="schedView" data-v="${k}">${n}</button>`).join("")}</div>`;
 function renderSchedule(){
+ if(UI.schedView==="month")return renderMonth();
  const sel=UI.schedDate,t=today(),ws=weekStart(sel),days=Array.from({length:7},(_,i)=>addDays(ws,i));
  const all=eventsOn(sel),evs=all.filter(e=>!e.allDay),ad=all.filter(e=>e.allDay);
  // simple overlap columns
@@ -945,6 +979,7 @@ function renderSchedule(){
  tl+="</div>";
  return `
  <header class="top"><div><p class="eyebrow">${esc(fmtDate(ws,{month:"short",day:"numeric"}))} – ${esc(fmtDate(addDays(ws,6),{month:"short",day:"numeric"}))}</p><h1>Schedule</h1></div><button class="icon-btn primary" data-act="eventNew" aria-label="Add event">${I.plus}</button></header>
+ ${viewSeg()}
  <div class="datenav"><button class="icon-btn" data-act="schedWeek" data-n="-7" aria-label="Previous week">${I.l}</button><button class="lbl" data-act="schedWeek" data-n="0">${sel===t?"Today":esc(fmtDate(sel,{weekday:"long"}))}<br><span class="muted small" style="font-family:var(--f-body);font-weight:500">${all.length?`${all.length} ${all.length===1?"event":"events"}${all.some(e=>e.important)?" · flagged":""}`:"Free day"}</span></button><button class="icon-btn" data-act="schedWeek" data-n="7" aria-label="Next week">${I.r}</button></div>
  <div class="week">${days.map(d=>`<button class="wd ${d===sel?"on":""} ${d===t?"today":""}" data-act="schedDay" data-d="${d}"><small>${DOW[parse(d).getDay()].slice(0,1)}</small><b class="tnum">${parse(d).getDate()}</b><i class="${eventsOn(d).length?"has":""} ${eventsOn(d).some(e=>e.important)?"imp":""}"></i></button>`).join("")}</div>
  ${S.events.length?"":`<div class="rows"><div class="empty"><b>Build your week</b>Tap + to add classes, work shifts, gym time or plans. Weekly events repeat on the days you pick.</div></div>`}
@@ -1145,7 +1180,10 @@ const H={
  sessionNew:()=>sessionSheet(),
  sessionDel:(el,ev)=>{const id=el.dataset.id;if(UI.armed===id){const x=S.sessions.find(s=>s.id===id);UI.armed=null;if(x)act(()=>{S.sessions=S.sessions.filter(s=>s.id!==id)},null,ev,[new Date(x.start).getFullYear()])}else{UI.armed=id;render();setTimeout(()=>{if(UI.armed===id){UI.armed=null;render()}},3000)}},
  eventNew:()=>eventSheet(),
- impOpen:el=>{UI.schedDate=el.dataset.d;goTab("schedule")},
+ impOpen:el=>{UI.schedDate=el.dataset.d;UI.schedView="week";store.set("lul-sview","week");goTab("schedule")},
+ schedView:el=>{UI.schedView=el.dataset.v;store.set("lul-sview",UI.schedView);render()},
+ monthDay:el=>{UI.schedDate=el.dataset.d;UI.schedView="week";store.set("lul-sview","week");render();window.scrollTo(0,0)},
+ schedMonth:el=>{const n=Number(el.dataset.n);if(!n)UI.schedDate=today();else{const d=parse(UI.schedDate);UI.schedDate=ymd(new Date(d.getFullYear(),d.getMonth()+n,1))}render()},
  eventEdit:el=>eventSheet(S.events.find(x=>x.id===el.dataset.id)),
  schedDay:el=>{UI.schedDate=el.dataset.d;render()},
  schedWeek:el=>{const n=Number(el.dataset.n);UI.schedDate=n?addDays(UI.schedDate,n):today();render()}
