@@ -218,6 +218,20 @@ p{margin:0}
 .ev{position:absolute;border-radius:10px;padding:6px 8px;background:color-mix(in srgb,var(--c) 22%,var(--surface));border-left:4px solid var(--c);overflow:hidden;text-align:left;font-size:12px;line-height:1.25;min-width:0}
 .ev b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ev span{color:var(--muted)}
+.ev.imp{box-shadow:inset 0 0 0 2px var(--bad)}
+.ev .fl,.flag{display:inline-flex;vertical-align:-2px;color:var(--bad)}
+.ev .fl svg,.flag svg{width:13px;height:13px;fill:currentColor}
+.allday{display:flex;flex-direction:column;gap:6px}
+.allday button{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--c) 20%,var(--surface));border-left:4px solid var(--c);text-align:left;font-weight:700;font-size:14px;min-width:0}
+.allday button.imp{box-shadow:inset 0 0 0 2px var(--bad)}
+.allday button .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.allday button small{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;flex:none}
+.wd i.imp{background:var(--bad)!important}
+.imp-row .when{display:flex;flex-direction:column;align-items:center;justify-content:center;width:48px;height:48px;border-radius:12px;background:var(--surface-2);flex:none;line-height:1}
+.imp-row .when small{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--bad)}
+.imp-row .when b{font-family:var(--f-display);font-size:20px;font-weight:800}
+.count{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap;flex:none}
+.count.soon{color:var(--bad)}
 .now{position:absolute;left:44px;right:0;height:2px;background:var(--bad);z-index:2}
 .now::before{content:"";position:absolute;left:-5px;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--bad)}
 .empty{padding:22px 16px;text-align:center;color:var(--muted);font-size:14px}
@@ -431,6 +445,7 @@ const I={
  play:sv('<path d="M7 4.5v15l12-7.5z" fill="currentColor"/>'),
  pause:sv('<path d="M8 5v14M16 5v14" stroke-width="3.5"/>'),
  stop:sv('<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>'),
+ flag:sv('<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>'),
  news:sv('<path d="M4 5h13v14a2 2 0 0 0 2 2H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v10a2 2 0 0 1-2 2"/><path d="M7.5 9h6M7.5 13h6M7.5 17h3"/>'),
  ext:sv('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'),
  trash:sv('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>')
@@ -627,7 +642,10 @@ const chk=(on,c,act,attrs,cls="")=>`<button class="chk ${cls} ${on?"on":""}" sty
 const todaysTasks=d=>{const w=parse(d).getDay();return S.tasks.filter(t=>t.repeat==="once"?t.date===d:(t.days||[]).includes(w))};
 const studyOn=d=>S.sessions.filter(x=>ymd(new Date(x.start))===d).reduce((a,x)=>a+x.min,0);
 const subjOf=id=>S.subjects.find(s=>s.id===id)||{name:"Deleted subject",color:"#8A93B8"};
-const eventsOn=d=>{const w=parse(d).getDay();return S.events.filter(e=>e.repeat==="weekly"?(e.days||[]).includes(w):e.date===d).sort((a,b)=>toMin(a.start)-toMin(b.start))};
+const eventsOn=d=>{const w=parse(d).getDay();return S.events.filter(e=>e.repeat==="weekly"?(e.days||[]).includes(w):e.date===d).sort((a,b)=>(b.allDay?1:0)-(a.allDay?1:0)||toMin(a.start)-toMin(b.start))};
+const evTime=e=>e.allDay?"All day":`${fmtTime(e.start)} – ${fmtTime(e.end)}`;
+function importantAhead(days){const t=today(),nm=new Date().getHours()*60+new Date().getMinutes(),out=[];
+ for(let i=0;i<days;i++){const d=addDays(t,i);eventsOn(d).filter(e=>e.important).forEach(e=>{if(i===0&&!e.allDay&&toMin(e.end)<=nm)return;out.push({e,d,i})})}return out}
 function greet(){const h=new Date().getHours();return h<5?"Up late":h<12?"Good morning":h<17?"Good afternoon":"Good evening"}
 function timeAgo(ts){const m=Math.round((Date.now()-ts)/6e4);if(m<1)return"now";if(m<60)return m+"m ago";const h=Math.round(m/60);if(h<24)return h+"h ago";return Math.round(h/24)+"d ago"}
 
@@ -766,7 +784,8 @@ function renderHome(){
  const tT=todaysTasks(t),tD=tT.filter(x=>S.taskDone[t]&&S.taskDone[t][x.id]!=null).length;
  const sm=studyOn(t)+(S.timer?Math.floor(timerElapsed()/6e4):0);
  const nowMin=now.getHours()*60+now.getMinutes();
- const next=eventsOn(t).find(e=>toMin(e.end)>nowMin);
+ const next=eventsOn(t).find(e=>!e.allDay&&toMin(e.end)>nowMin);
+ const imp=importantAhead(30).slice(0,5);
  const months=Array.from({length:12},(_,i)=>`<span class="${i<now.getMonth()?"on":""}"></span>`).join("");
  return `
  <header class="top"><div><p class="eyebrow">${esc(now.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"}))}</p><h1>${greet()}${S.name?", "+esc(S.name):""}</h1></div>
@@ -792,8 +811,11 @@ function renderHome(){
  <section><div class="sec-head"><h2>Habits</h2><button class="link" data-act="tab" data-tab="habits">All habits</button></div>
   ${hT.length?`<div class="rows">${hT.map(h=>`<div class="row ${h.done[t]?"done":""}"><span class="dot" style="background:${h.color}"></span><div class="grow"><p class="name">${esc(h.name)}</p><p class="meta"><span>${streak(h)} day streak</span></p></div><span class="chip">+${h.xp}</span>${chk(!!h.done[t],h.color,"habitToday",`data-id="${h.id}"`)}</div>`).join("")}</div>`
   :`<div class="rows"><div class="empty"><b>No habits yet</b>Add one on the Habits tab and start shading in squares.</div></div>`}</section>
+ <section><div class="sec-head"><h2>Important coming up</h2><button class="link" data-act="tab" data-tab="schedule">Schedule</button></div>
+  ${imp.length?`<div class="rows">${imp.map(({e,d,i})=>`<button class="row imp-row" style="width:100%;text-align:left" data-act="impOpen" data-id="${e.id}" data-d="${d}"><div class="when"><small>${esc(parse(d).toLocaleDateString(undefined,{month:"short"}))}</small><b class="tnum">${parse(d).getDate()}</b></div><div class="grow"><p class="name"><span class="flag">${I.flag}</span> ${esc(e.title)}</p><p class="meta"><span>${esc(fmtDate(d,{weekday:"long"}))}</span><span class="tnum">${evTime(e)}</span>${e.loc?`<span>${esc(e.loc)}</span>`:""}</p></div><span class="count ${i<=2?"soon":""}">${i===0?"Today":i===1?"Tomorrow":`In ${i} days`}</span></button>`).join("")}</div>`
+  :`<div class="rows"><div class="empty"><b>No important events coming up</b>Flag an event as important in Schedule and it shows up here.</div></div>`}</section>
  <section><div class="sec-head"><h2>Up next</h2><button class="link" data-act="tab" data-tab="schedule">Schedule</button></div>
-  ${next?`<div class="rows"><div class="row"><span class="dot" style="background:${next.color}"></span><div class="grow"><p class="name">${esc(next.title)}</p><p class="meta"><span class="tnum">${fmtTime(next.start)} – ${fmtTime(next.end)}</span>${next.loc?`<span>${esc(next.loc)}</span>`:""}</p></div>${toMin(next.start)<=nowMin?'<span class="live">Now</span>':""}</div></div>`
+  ${next?`<div class="rows"><div class="row"><span class="dot" style="background:${next.color}"></span><div class="grow"><p class="name">${esc(next.title)}</p><p class="meta"><span class="tnum">${fmtTime(next.start)} – ${fmtTime(next.end)}</span>${next.important?`<span class="flag">${I.flag}</span>`:""}${next.loc?`<span>${esc(next.loc)}</span>`:""}</p></div>${toMin(next.start)<=nowMin?'<span class="live">Now</span>':""}</div></div>`
   :`<div class="rows"><div class="empty"><b>Nothing else scheduled today</b>Add classes, shifts or plans in Schedule.</div></div>`}</section>
  ${reflectCard()}
  <section><div class="sec-head"><h2>Badges</h2><span class="muted small tnum">${st.ach.length} of ${ACH.length}</span></div>
@@ -910,7 +932,7 @@ function renderStudy(){
 const HSTART=6,HEND=24,PX=52;
 function renderSchedule(){
  const sel=UI.schedDate,t=today(),ws=weekStart(sel),days=Array.from({length:7},(_,i)=>addDays(ws,i));
- const evs=eventsOn(sel);
+ const all=eventsOn(sel),evs=all.filter(e=>!e.allDay),ad=all.filter(e=>e.allDay);
  // simple overlap columns
  const cols=[];evs.forEach(e=>{let c=0;while(cols[c]&&toMin(cols[c])>toMin(e.start))c++;cols[c]=e.end;e._c=c});
  const ncol=Math.max(1,cols.length);
@@ -918,14 +940,15 @@ function renderSchedule(){
  let tl=`<div class="tl" style="height:${(HEND-HSTART)*PX}px">`;
  for(let h=HSTART;h<HEND;h++)tl+=`<div class="hr" style="top:${(h-HSTART)*PX}px">${h%12||12}${h<12?"AM":"PM"}</div>`;
  evs.forEach(e=>{const s=clamp(toMin(e.start),HSTART*60,HEND*60),en=clamp(Math.max(toMin(e.end),s+20),HSTART*60,HEND*60);const w=`(100% - 56px) / ${ncol}`;
-  tl+=`<button class="ev" style="--c:${e.color};top:${(s-HSTART*60)/60*PX+1}px;height:${Math.max((en-s)/60*PX-3,26)}px;left:calc(52px + ${w} * ${e._c});width:calc(${w} - 4px)" data-act="eventEdit" data-id="${e.id}"><b>${esc(e.title)}</b><span class="tnum">${fmtTime(e.start)}–${fmtTime(e.end)}${e.loc?" · "+esc(e.loc):""}</span></button>`});
+  tl+=`<button class="ev ${e.important?"imp":""}" style="--c:${e.color};top:${(s-HSTART*60)/60*PX+1}px;height:${Math.max((en-s)/60*PX-3,26)}px;left:calc(52px + ${w} * ${e._c});width:calc(${w} - 4px)" data-act="eventEdit" data-id="${e.id}"><b>${e.important?`<span class="fl">${I.flag}</span> `:""}${esc(e.title)}</b><span class="tnum">${fmtTime(e.start)}–${fmtTime(e.end)}${e.loc?" · "+esc(e.loc):""}</span></button>`});
  if(sel===t&&nm>=HSTART*60)tl+=`<div class="now" style="top:${(nm-HSTART*60)/60*PX}px"></div>`;
  tl+="</div>";
  return `
  <header class="top"><div><p class="eyebrow">${esc(fmtDate(ws,{month:"short",day:"numeric"}))} – ${esc(fmtDate(addDays(ws,6),{month:"short",day:"numeric"}))}</p><h1>Schedule</h1></div><button class="icon-btn primary" data-act="eventNew" aria-label="Add event">${I.plus}</button></header>
- <div class="datenav"><button class="icon-btn" data-act="schedWeek" data-n="-7" aria-label="Previous week">${I.l}</button><button class="lbl" data-act="schedWeek" data-n="0">${sel===t?"Today":esc(fmtDate(sel,{weekday:"long"}))}<br><span class="muted small" style="font-family:var(--f-body);font-weight:500">${evs.length?`${evs.length} ${evs.length===1?"event":"events"}`:"Free day"}</span></button><button class="icon-btn" data-act="schedWeek" data-n="7" aria-label="Next week">${I.r}</button></div>
- <div class="week">${days.map(d=>`<button class="wd ${d===sel?"on":""} ${d===t?"today":""}" data-act="schedDay" data-d="${d}"><small>${DOW[parse(d).getDay()].slice(0,1)}</small><b class="tnum">${parse(d).getDate()}</b><i class="${eventsOn(d).length?"has":""}"></i></button>`).join("")}</div>
+ <div class="datenav"><button class="icon-btn" data-act="schedWeek" data-n="-7" aria-label="Previous week">${I.l}</button><button class="lbl" data-act="schedWeek" data-n="0">${sel===t?"Today":esc(fmtDate(sel,{weekday:"long"}))}<br><span class="muted small" style="font-family:var(--f-body);font-weight:500">${all.length?`${all.length} ${all.length===1?"event":"events"}${all.some(e=>e.important)?" · flagged":""}`:"Free day"}</span></button><button class="icon-btn" data-act="schedWeek" data-n="7" aria-label="Next week">${I.r}</button></div>
+ <div class="week">${days.map(d=>`<button class="wd ${d===sel?"on":""} ${d===t?"today":""}" data-act="schedDay" data-d="${d}"><small>${DOW[parse(d).getDay()].slice(0,1)}</small><b class="tnum">${parse(d).getDate()}</b><i class="${eventsOn(d).length?"has":""} ${eventsOn(d).some(e=>e.important)?"imp":""}"></i></button>`).join("")}</div>
  ${S.events.length?"":`<div class="rows"><div class="empty"><b>Build your week</b>Tap + to add classes, work shifts, gym time or plans. Weekly events repeat on the days you pick.</div></div>`}
+ ${ad.length?`<div class="allday">${ad.map(e=>`<button class="${e.important?"imp":""}" style="--c:${e.color}" data-act="eventEdit" data-id="${e.id}"><small>All day</small><span class="grow">${e.important?`<span class="flag">${I.flag}</span> `:""}${esc(e.title)}${e.loc?` · ${esc(e.loc)}`:""}</span></button>`).join("")}</div>`:""}
  ${tl}`;
 }
 
@@ -1031,18 +1054,24 @@ function eventSheet(ev){
  openSheet(isNew?"New event":"Edit event",`
   <div class="field"><label for="eTitle">Event</label><input class="inp" id="eTitle" maxlength="50" placeholder="e.g. ECON 1001 lecture" value="${esc(ev.title)}"></div>
   <div class="field"><label for="eLoc">Where (optional)</label><input class="inp" id="eLoc" maxlength="40" placeholder="e.g. Tory 360" value="${esc(ev.loc||"")}"></div>
-  <div class="two"><div class="field"><label for="eS">Starts</label><input class="inp" id="eS" type="time" value="${ev.start}"></div><div class="field"><label for="eE">Ends</label><input class="inp" id="eE" type="time" value="${ev.end}"></div></div>
+  <button type="button" class="switch ${ev.important?"on":""}" id="eImp" aria-pressed="${!!ev.important}"><span><span class="flag">${I.flag}</span> Important</span><i></i></button>
+  <button type="button" class="switch ${ev.allDay?"on":""}" id="eAll" aria-pressed="${!!ev.allDay}">All day<i></i></button>
+  <div class="two" id="eTimes" ${ev.allDay?"hidden":""}><div class="field"><label for="eS">Starts</label><input class="inp" id="eS" type="time" value="${ev.allDay?"09:00":ev.start}"></div><div class="field"><label for="eE">Ends</label><input class="inp" id="eE" type="time" value="${ev.allDay?"10:00":ev.end}"></div></div>
   <div class="field"><span class="lab">Repeats</span>${pick("repeat",[["weekly","Every week"],["once","One date"]],ev.repeat)}
    <div id="eDaysW" ${ev.repeat==="weekly"?"":"hidden"}>${pickMulti("days",[1,2,3,4,5,6,0].map(i=>[i,DOW[i]]),ev.days||[])}</div>
    <input class="inp" id="eDate" type="date" value="${ev.date||UI.schedDate}" ${ev.repeat==="once"?"":"hidden"}></div>
   <div class="field"><span class="lab">Color</span>${colorPick(ev.color)}</div>
   <div class="sheet-actions">${isNew?"":`<button type="button" class="btn danger" id="eDel">Delete</button>`}<button type="button" class="btn primary" id="eSave">${isNew?"Add event":"Save"}</button></div>`,f=>{
   f.addEventListener("pick",e=>{if(e.target.dataset.name==="repeat"){const r=getPick(f,"repeat");$("#eDaysW").hidden=r!=="weekly";$("#eDate").hidden=r!=="once"}});
+  const sw=b=>{b.classList.toggle("on");b.setAttribute("aria-pressed",b.classList.contains("on"))};
+  $("#eImp").onclick=e=>sw(e.currentTarget);
+  $("#eAll").onclick=e=>{sw(e.currentTarget);$("#eTimes").hidden=e.currentTarget.classList.contains("on")};
   $("#eSave").onclick=()=>{const title=$("#eTitle").value.trim();if(!title){$("#eTitle").focus();toast("Give the event a name");return}
-   const s=$("#eS").value||"09:00",en=$("#eE").value||"10:00";if(toMin(en)<=toMin(s)){toast("End time needs to be after the start");return}
+   const allDay=$("#eAll").classList.contains("on"),important=$("#eImp").classList.contains("on");
+   const s=allDay?"00:00":($("#eS").value||"09:00"),en=allDay?"23:59":($("#eE").value||"10:00");if(!allDay&&toMin(en)<=toMin(s)){toast("End time needs to be after the start");return}
    const repeat=getPick(f,"repeat")||"weekly",days=getMulti(f,"days").map(Number);if(repeat==="weekly"&&!days.length){toast("Pick at least one day");return}
-   const d={title,loc:$("#eLoc").value.trim(),start:s,end:en,repeat,days,date:$("#eDate").value||UI.schedDate,color:getPick(f,"color")||ev.color};
-   if(isNew)S.events.push({id:uid(),...d});else Object.assign(ev,d);commit();closeSheet();toast(isNew?"Event added":"Event saved")};
+   const d={title,loc:$("#eLoc").value.trim(),start:s,end:en,allDay,important,repeat,days,date:$("#eDate").value||UI.schedDate,color:getPick(f,"color")||ev.color};
+   if(isNew)S.events.push({id:uid(),...d});else Object.assign(ev,d);commit();closeSheet();toast(important?(isNew?"Important event added":"Saved and flagged"):(isNew?"Event added":"Event saved"))};
   if(!isNew)armButton($("#eDel"),"Tap again to delete",()=>{S.events=S.events.filter(x=>x!==ev);commit();closeSheet();toast("Event deleted")});
  });
 }
@@ -1116,6 +1145,7 @@ const H={
  sessionNew:()=>sessionSheet(),
  sessionDel:(el,ev)=>{const id=el.dataset.id;if(UI.armed===id){const x=S.sessions.find(s=>s.id===id);UI.armed=null;if(x)act(()=>{S.sessions=S.sessions.filter(s=>s.id!==id)},null,ev,[new Date(x.start).getFullYear()])}else{UI.armed=id;render();setTimeout(()=>{if(UI.armed===id){UI.armed=null;render()}},3000)}},
  eventNew:()=>eventSheet(),
+ impOpen:el=>{UI.schedDate=el.dataset.d;goTab("schedule")},
  eventEdit:el=>eventSheet(S.events.find(x=>x.id===el.dataset.id)),
  schedDay:el=>{UI.schedDate=el.dataset.d;render()},
  schedWeek:el=>{const n=Number(el.dataset.n);UI.schedDate=n?addDays(UI.schedDate,n):today();render()}
